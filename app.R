@@ -16,88 +16,141 @@ maxNumberChangePoints <- 10
 #### Shiny User Interface ####
 ui <- fluidPage(
   
-  h2("Change point detection"),
+  h2("Change point detection Demo"),
+  br(),
   
-  plotOutput("plot1"),
+  selectInput(inputId = "dataset",
+              label = "Select dataset",
+              choices = list("Dataset 1" = 1,
+                             "Dataset 2" = 2,
+                             "Dataset 3" = 3),
+              selected = 1),
   
-  sliderInput(inputId = "burnin",
-              label = "Burn-in size",
-              value = 0,
-              min = 0, max = 50),
+  ##### Plot 1 #####
+  ## This plot draws the selected dataset
+  plotOutput(outputId = "plot1"),
   
   sliderInput(inputId = "last",
               label = "Remove last observations",
               value = 0,
               min = 0, max = 50),
   
+  br(),
   
-  # plotOutput("plot2"),
   
-  selectInput("changePointSelection",
-              h4("How will you choose the change points?"), 
+  ##### Selection of change points #####
+  h3("Selection of change points"),
+  p("Change points can be selected in 3 different ways:"),
+  tags$ul(
+    tags$li(tags$b("Automatically"), ": the number of change points and their 
+            position are automatically determined."),
+    tags$li(tags$b("Semi-automatically"), ": the user determines the number of 
+            change points, but which of those are change points is determined 
+            automatically."),
+    tags$li(tags$b("Manually"), ": the user determines how many and which points 
+            are considered change points.")
+  ),
+  
+  selectInput(inputId = "changePointSelection",
+              label = NULL,
               choices = list("Automatically" = "automatic", 
                              "Semi-automatically" = "semi-automatic", 
                              "Manually" = "manual"), 
               selected = 1),
   
-  
-  # Only show this panel if "Automatically" is chosen
+  ## Only show this panel if "Automatically" is chosen
   conditionalPanel(
     condition = "input.changePointSelection == 'automatic'",
     p("Number of change points: "),
-    verbatimTextOutput("nChangePoints")
-  ),
-  
-  # Only show this panel if "Semi-automatically" is chosen
-  conditionalPanel(
-    condition = "input.changePointSelection == 'semi-automatic'",
-    numericInput("nChangePoints", 
-                 p("Choose number of change points: "), 
-                 value = 1, 
-                 min = 1, 
-                 max = maxNumberChangePoints)
-  ),
-  
-  # Only show this panel if "Manually" is chosen
-  conditionalPanel(
-    condition = "input.changePointSelection == 'manual'",
-    radioButtons("add_remove_changePoint", label = "",
-                 choices = list("Add change point" = "add", "Remove change point" = "remove"), 
-                 selected = "add")
-  ),
-  
-  # Only show this panel if "Automatically" or "Semi-automatically" is chosen
-  conditionalPanel(
-    condition = "input.changePointSelection == 'automatic' || input.changePointSelection == 'semi-automatic'",
-    plotOutput("plot3"),
-    p("Change points at: "), 
-    verbatimTextOutput("plot3_text")
-  ),
-  
-  # Only show this panel if "Manually" is chosen
-  conditionalPanel(
-    condition = "input.changePointSelection == 'manual'",
-    plotOutput("plot3_manual", click = "plot3_click", hover = "plot3_hover"),
-    fluidRow(
-      column(width = 4, p("Pointer at: "), verbatimTextOutput("plot3_clickInfo")),
-      column(width = 8, p("Change points at: "), verbatimTextOutput("plot3_text_manual"))
+    div(style="width: 70px;",
+        verbatimTextOutput(outputId = "nChangePoints")
     )
   ),
   
+  ## Only show this panel if "Semi-automatically" is chosen
+  conditionalPanel(
+    condition = "input.changePointSelection == 'semi-automatic'",
+    p("Choose number of change points: "),
+    numericInput(inputId = "nChangePoints", 
+                 label = NULL,
+                 value = 1, 
+                 min = 1, 
+                 max = maxNumberChangePoints,
+                 width = '70px')
+  ),
   
-  checkboxInput("regression_line", "Plot regression line", value = FALSE),
+  ## Only show this panel if "Manually" is chosen
+  conditionalPanel(
+    condition = "input.changePointSelection == 'manual'",
+    div(style="height: 5px"),
+    radioButtons(inputId = "add_remove_changePoint",
+                 label = NULL,
+                 choices = list("Add change point" = "add",
+                                "Remove change point" = "remove"), 
+                 selected = "add")
+  ),
+  
+  
+  ##### Plot 2 #####
+  # plotOutput(outputId = "plot2"),
+  
+  
+  ##### Plot 3 #####
+  ## Only show this panel if "Automatically" or "Semi-automatically" is chosen
+  conditionalPanel(
+    condition = "input.changePointSelection == 'automatic' || 
+                 input.changePointSelection == 'semi-automatic'",
+    plotOutput(outputId = "plot3"),
+    p("Change points at: "), 
+    verbatimTextOutput(outputId = "plot3_text")
+  ),
+  
+  ## Only show this panel if "Manually" is chosen
+  conditionalPanel(
+    condition = "input.changePointSelection == 'manual'",
+    plotOutput(outputId = "plot3_manual",
+               click = "plot3_click",
+               hover = "plot3_hover"),
+    fluidRow(
+      column(width = 4,
+             p("Pointer at: "),
+             verbatimTextOutput(outputId = "plot3_clickInfo")
+             ),
+      column(width = 8,
+             p("Change points at: "),
+             verbatimTextOutput(outputId = "plot3_text_manual")
+             )
+    )
+  ),
+  
+  checkboxInput(inputId = "regression_line",
+                label = "Plot regression line",
+                value = FALSE),
   
   br(),
+  
+  
+  ##### Performance #####
+  h3("Computation of performance"),
+  p("Performance here is associated to how likely it is that the failure rate
+     of a product has actually gone up, as opposed to it being random chance. 
+     The higher the likelihood of the failure rate to have actually gone up, 
+     the lower the product is performing. The performance is calculated by using
+     bootstrapping and Welch's t-test to get a p-value of how likely it is that
+     the failure rate has gone up, then this p-value is mapped to a value 
+     (performance) between 0% and 100%."),
+  
+  p("To compute the performance for the last change point, click the button 
+     below."),
+  actionButton(inputId = "performance",
+               label = "Compute performance"),
+  
+  # br(),
   br(),
   
-  actionButton("performance", "Compute performance"),
+  plotOutput(outputId = "histogram"),
   
-  br(),
-  br(),
-  
-  plotOutput("hist"),
-  
-  br(),
+  # br(),
   br(),
   
   conditionalPanel(
@@ -106,14 +159,17 @@ ui <- fluidPage(
     sliderInput(inputId = "sensitivity",
                 label = "Choose sensitivity",
                 value = 5,
-                min = 1, max = 10),
-    verbatimTextOutput("performance"),
+                min = 1,
+                max = 10),
+    verbatimTextOutput(outputId = "performance"),
     
-    checkboxInput("show_pvalue", "Show p-value", value = FALSE),
-    conditionalPanel(
-      condition = "input.show_pvalue == 1",
-      verbatimTextOutput("show_pvalue")
-    )
+    checkboxInput(inputId = "show_pvalue",
+                  label = "Show p-value",
+                  value = FALSE),
+
+    conditionalPanel(condition = "input.show_pvalue == 1",
+                     verbatimTextOutput(outputId = "show_pvalue")
+                     )
   ),
   
   br(),
@@ -132,37 +188,34 @@ server <- function(input, output, session) {
   
   #### Data generation ####
   data_full <- reactive({
-    set.seed(3)
     
+    ## Datasets' parameters
     n1 <- 50
     n2 <- 50
     n <- n1 + n2
     
     mu1 <- 0.010
-    mu2 <- 0
     sd <- 0.003
     
-    # First n1 observations with mean mu1 and standard deviation sd
+    ## Different seeds for different datasets
+    if (as.numeric(input$dataset) == 1) set.seed(5)
+    if (as.numeric(input$dataset) == 2) set.seed(2)
+    if (as.numeric(input$dataset) == 3) set.seed(3)
+    
+    ## First n1 observations with mean mu1 and standard deviation sd
     y1 <- mu1 + rnorm(n = n1, mean = 0, sd = sd)
     
-    # Next n2 observations with a mean with exponential drift and same standard
-    # deviation
-    intercept <- 0.001
-    mu2 <- mu1 +  # same previous mean
-           intercept * exp( (1:n2 + 30) * 0.03 ) - intercept  # exponential drift
-    y2 <- mu2 + rnorm(n = n2, mean = 0, sd = sd)
+    ## Next n2 observations with a mean with drift and standard deviation sd
+    drift <- mu1 / n1 * 1:n2
+    y2 <- mu1 + drift + rnorm(n = n2, mean = 0, sd = sd)
     
+    ## Failure rates are always non-negative
     y1[y1 < 0] <- y2[y2 < 0] <- 0
     
     data.frame(time = 1:n,
                y = c(y1, y2))
   })
   
-  ## Change default values in slider inputs
-  observe({
-    updateSliderInput(session, "burnin", value = 0)
-    updateSliderInput(session, "last", value = 0)
-  })
   
   #### Reactive variables ####
   
@@ -171,7 +224,7 @@ server <- function(input, output, session) {
   
   ## Data filtered
   data <- reactive({
-    data_full()[(1 + input$burnin) : (n_full() - input$last), ]
+    data_full()[1 : (n_full() - input$last), ]
   })
   
   ## Number of observations after filtering
@@ -179,7 +232,6 @@ server <- function(input, output, session) {
   
   ## Create list of reactive values, and create value cp for change points
   rv <- reactiveValues(cp = NULL)
-  
   
   
   #### Plot 1 ####
@@ -192,15 +244,17 @@ server <- function(input, output, session) {
   })
   
   
-  
   #### Find change points automatically ####
-  r <- reactive({  # K is number of segments, add 5 so if elbow is in n=maxN it can be detected
+  
+  ## K is number of segments, add 5 so if elbow is in n=maxN it can be detected
+  r <- reactive({
     result <- dynProg.mean(data()$y, K=maxNumberChangePoints + 5)
     rv$nCPready <- TRUE
     result
-    })  
+  })  
   
-  # ## PLOT 2
+  
+  #### Plot 2 ####
   # 
   # This is the plot that shows how likely are the different points to be a change point
   #
@@ -213,7 +267,7 @@ server <- function(input, output, session) {
   
   
   
-  # Get number of change points
+  ## Get number of change points
   nChangePoints <- reactive({
     
     if (input$changePointSelection == "automatic"){  # Automatic
@@ -223,22 +277,22 @@ server <- function(input, output, session) {
     }
   })
   
-  # Output number of change points
+  ## Output number of change points
   output$nChangePoints <- renderText({ nChangePoints() })
   
   
-  # Change points including 0 and n
+  ## Change points including 0 and n
   Topt <- reactive({ c(0, r()$Test[nChangePoints(), 1:nChangePoints()], n()) })
   
-  # Separation between different segments (change points + 0.5)
-  Tr <- reactive({ c(0, Topt()[2:(nChangePoints() + 1)] + 0.5, n()) + input$burnin })
+  ## Separation between different segments (change points + 0.5)
+  Tr <- reactive({ c(0, Topt()[2:(nChangePoints() + 1)] + 0.5, n()) })
   
   
   
-  # This is to avoid an error due to lack of values when launching the app
+  ## This is to avoid an error due to lack of values when launching the app
   observeEvent(input$changePointSelection, { rv$cp <- Tr() }, once = TRUE)
   
-  # Update every time we go back to manual if necessary
+  ## Update every time we go back to manual if necessary
   observe({
     if (input$changePointSelection == "manual") { 
       if (rv$cp[length(rv$cp)] != n()) {
@@ -249,7 +303,7 @@ server <- function(input, output, session) {
   
   
   
-  # x_n of first mean, x_1 - 1 of second mean
+  ## x_n of first mean, x_1 - 1 of second mean
   x1 <- reactive({
     if (input$changePointSelection == "manual") {
       rv$cp[length(rv$cp) - 1] + 0.5
@@ -258,10 +312,10 @@ server <- function(input, output, session) {
     }
   })
   
-  # Last data point in filtered data, x_2 of second mean
-  x_end <- reactive({ n() + input$burnin })
+  ## Last data point in filtered data, x_2 of second mean
+  x_end <- reactive({ n() })
   
-  # x_1 of first mean
+  ## x_1 of first mean
   x_previous <- reactive({
     if (input$changePointSelection == "manual") {
       rv$cp[length(rv$cp) - 2] + 0.5
@@ -274,12 +328,12 @@ server <- function(input, output, session) {
   
   #### Plot 3 ####
   
-  # Data mean per segment, green horizontal lines in the plot (automatic and semi-automatic)
+  ## Data mean per segment, green horizontal lines in the plot (automatic and semi-automatic)
   dm <- reactive({
     
     d <- data.frame()
     
-    # Store mean for each segment
+    ## Store mean for each segment
     for (k in ( 1:(nChangePoints() + 1) )) {
       m <- mean( data()$y[(Topt()[k] + 1) : (Topt()[k + 1])] )
       d <- rbind(d, c(Tr()[k], Tr()[k + 1], m, m) )
@@ -288,13 +342,13 @@ server <- function(input, output, session) {
     d
   })
   
-  # Data for the dotted regression line
+  ## Data for the dotted regression line
   data_regression <- reactive({
     
     length_previous_segment <- abs( x1() - x_previous() )
     extra_lm <- floor(length_previous_segment * 0.1)  # take into account last 10% from previous interval (sometimes the change point is slightly after the trend started, this helps get the correct trend line)
     
-    # x and y for the linear regression model
+    ## x and y for the linear regression model
     x_lm <- (x1() - extra_lm) : x_end()
     y_lm <- data_full()$y[x_lm]
     
@@ -311,7 +365,8 @@ server <- function(input, output, session) {
     
     g <- ggplot(data()) +
       geom_point(aes(time, y), color="#6666CC") +
-      ylab("failure rate") +
+      xlab("Time (months)") +
+      ylab("Failure rate (%)") +
       geom_vline(xintercept = Tr()[2:(nChangePoints() + 1)], color="red", size=0.25) +
       geom_segment(data = dm(), aes(x=x1, y=y1, xend=x2, yend=y2), colour="green", size=0.75)
     
@@ -331,9 +386,9 @@ server <- function(input, output, session) {
   
   output$plot3_manual <- renderPlot({
     
-    # Update change points
+    ## Update change points
     if (!is.null(input$plot3_click)) {
-      # Get new change point
+      ## Get new change point
       x_new <- (ceiling(input$plot3_click$x) + floor(input$plot3_click$x)) / 2
       
       if (input$add_remove_changePoint == "add"){
@@ -348,7 +403,7 @@ server <- function(input, output, session) {
     nSegments_new <- length(rv$cp) - 1
     Topt_new <- floor(rv$cp)
     
-    # Data means (manual)
+    ## Data means (manual)
     d <- data.frame()
     for (k in 1:nSegments_new) {
       m <- mean( data()$y[(Topt_new[k] + 1) : (Topt_new[k + 1])] )
@@ -417,7 +472,7 @@ server <- function(input, output, session) {
     
     n_sim <- 1000
     
-    # The detail to be captured by the progress bar should be contained within this function and its braces
+    ## The detail to be captured by the progress bar should be contained within this function and its braces
     withProgress(message = 'Computing performance', min = 0, max = n_sim, value = 0, {
       
       progress <- function(i) incProgress(1, detail = paste("Running simulation", i, "out of", n_sim))
@@ -448,7 +503,7 @@ server <- function(input, output, session) {
   })
   
   
-  output$hist <- renderPlot({
+  output$histogram <- renderPlot({
     
     if (!is.null(rv$V.stat)){
       
