@@ -13,7 +13,7 @@ source("dynProg.R")
 maxNumberChangePoints <- 10
 
 
-#### Shiny User Interface ####
+#### User Interface ####
 ui <- fluidPage(
   
   h2("Change point detection Demo"),
@@ -182,11 +182,11 @@ ui <- fluidPage(
 
 
 
-#### Shiny Server ####
+#### Server ####
 
 server <- function(input, output, session) {
   
-  #### Data generation ####
+  ## Generate dataset
   data_full <- reactive({
     
     ## Datasets' parameters
@@ -216,22 +216,16 @@ server <- function(input, output, session) {
                y = c(y1, y2))
   })
   
-  
-  #### Reactive variables ####
-  
   ## Number of data points in full dataset
   n_full <- reactive({ nrow(data_full()) })
   
-  ## Data filtered
+  ## Data filtered without last observations chosen by the user
   data <- reactive({
     data_full()[1 : (n_full() - input$last), ]
   })
   
   ## Number of observations after filtering
   n <- reactive({ length(data()$y) })
-  
-  ## Create list of reactive values, and create value cp for change points
-  rv <- reactiveValues(cp = NULL)
   
   
   #### Plot 1 ####
@@ -246,11 +240,10 @@ server <- function(input, output, session) {
   
   #### Find change points automatically ####
   
-  ## K is number of segments, add 5 so if elbow is in n=maxN it can be detected
+  ## Solve dynamic programming problem
   r <- reactive({
-    result <- dynProg.mean(data()$y, K=maxNumberChangePoints + 5)
-    rv$nCPready <- TRUE
-    result
+    result <- dynProg.mean(y = data()$y,
+                           max_ncp = maxNumberChangePoints + 4)
   })  
   
   
@@ -261,8 +254,8 @@ server <- function(input, output, session) {
   # output$plot2 <- renderPlot({
   # 
   #   ggplot(data=r()$obj) +
-  #     geom_line(aes(K,U), size=1, colour="purple") +
-  #     geom_point(aes(K,U), size=2, colour="purple")
+  #     geom_line(aes(ncp,U), size=1, colour="purple") +
+  #     geom_point(aes(ncp,U), size=2, colour="purple")
   # })
   
   
@@ -281,22 +274,25 @@ server <- function(input, output, session) {
   output$nChangePoints <- renderText({ nChangePoints() })
   
   
+  ## Create list of reactive values, and create value cp for change points
+  rv <- reactiveValues(cp = NULL)
+  
   ## Change points including 0 and n
-  Topt <- reactive({ c(0, r()$Test[nChangePoints(), 1:nChangePoints()], n()) })
+  cps_0n <- reactive({ c(0, r()$cps_pos[nChangePoints(), 1:nChangePoints()], n()) })
   
   ## Separation between different segments (change points + 0.5)
-  Tr <- reactive({ c(0, Topt()[2:(nChangePoints() + 1)] + 0.5, n()) })
+  seps_0n <- reactive({ c(0, cps_0n()[2:(nChangePoints() + 1)] + 0.5, n()) })
   
   
   
   ## This is to avoid an error due to lack of values when launching the app
-  observeEvent(input$changePointSelection, { rv$cp <- Tr() }, once = TRUE)
+  observeEvent(input$changePointSelection, { rv$cp <- seps_0n() }, once = TRUE)
   
   ## Update every time we go back to manual if necessary
   observe({
     if (input$changePointSelection == "manual") { 
       if (rv$cp[length(rv$cp)] != n()) {
-        rv$cp <- Tr()
+        rv$cp <- seps_0n()
       }
     }
   })
@@ -308,7 +304,7 @@ server <- function(input, output, session) {
     if (input$changePointSelection == "manual") {
       rv$cp[length(rv$cp) - 1] + 0.5
     } else {
-      Tr()[nChangePoints() + 1] + 0.5
+      seps_0n()[nChangePoints() + 1] + 0.5
     }
   })
   
@@ -320,7 +316,7 @@ server <- function(input, output, session) {
     if (input$changePointSelection == "manual") {
       rv$cp[length(rv$cp) - 2] + 0.5
     } else {
-      Tr()[nChangePoints()] + 0.5
+      seps_0n()[nChangePoints()] + 0.5
     }
   })
   
@@ -335,8 +331,8 @@ server <- function(input, output, session) {
     
     ## Store mean for each segment
     for (k in ( 1:(nChangePoints() + 1) )) {
-      m <- mean( data()$y[(Topt()[k] + 1) : (Topt()[k + 1])] )
-      d <- rbind(d, c(Tr()[k], Tr()[k + 1], m, m) )
+      m <- mean( data()$y[(cps_0n()[k] + 1) : (cps_0n()[k + 1])] )
+      d <- rbind(d, c(seps_0n()[k], seps_0n()[k + 1], m, m) )
     }
     names(d) <- c("x1","x2","y1","y2")
     d
@@ -367,7 +363,7 @@ server <- function(input, output, session) {
       geom_point(aes(time, y), color="#6666CC") +
       xlab("Time (months)") +
       ylab("Failure rate (%)") +
-      geom_vline(xintercept = Tr()[2:(nChangePoints() + 1)], color="red", size=0.25) +
+      geom_vline(xintercept = seps_0n()[2:(nChangePoints() + 1)], color="red", size=0.25) +
       geom_segment(data = dm(), aes(x=x1, y=y1, xend=x2, yend=y2), colour="green", size=0.75)
     
     if (input$regression_line){
@@ -376,7 +372,7 @@ server <- function(input, output, session) {
     g
   })
   
-  output$plot3_text <- renderText({ Tr()[2:(nChangePoints() + 1)] })
+  output$plot3_text <- renderText({ seps_0n()[2:(nChangePoints() + 1)] })
   
   
   
@@ -401,12 +397,12 @@ server <- function(input, output, session) {
     }
     
     nSegments_new <- length(rv$cp) - 1
-    Topt_new <- floor(rv$cp)
+    cps_0n_new <- floor(rv$cp)
     
     ## Data means (manual)
     d <- data.frame()
     for (k in 1:nSegments_new) {
-      m <- mean( data()$y[(Topt_new[k] + 1) : (Topt_new[k + 1])] )
+      m <- mean( data()$y[(cps_0n_new[k] + 1) : (cps_0n_new[k + 1])] )
       d <- rbind(d, c(rv$cp[k], rv$cp[k + 1], m, m) )
     }
     names(d) <- c("x1","x2","y1","y2")

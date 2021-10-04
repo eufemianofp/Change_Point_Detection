@@ -1,8 +1,9 @@
 
 
 ## Helper function to find change points
-dynProg.mean <- function(y, Kmax, Lmin = 1) {
-  Nr  <- Kmax - 1
+dynProg.mean <- function(y, max_ncp, Lmin = 1) {
+  
+  Kmax <- max_ncp + 1
   n <- length(y)
   V <- matrix(Inf, nrow = n, ncol = n)
   for (j1 in (1:(n - Lmin + 1))) {
@@ -17,11 +18,11 @@ dynProg.mean <- function(y, Kmax, Lmin = 1) {
   U[1] <- V[1, n]
   D <- V[, n]
   
-  Pos <- matrix(nrow = n, ncol = Nr)
-  Pos[n,] <- rep(n, Nr)
-  tau.mat <- matrix(nrow = Nr, ncol = Nr)
+  Pos <- matrix(nrow = n, ncol = max_ncp)
+  Pos[n,] <- rep(n, max_ncp)
+  tau.mat <- matrix(nrow = max_ncp, ncol = max_ncp)
   
-  for (k in 1:Nr) {
+  for (k in 1:max_ncp) {
     for (j in 1:(n - 1)) {
       dist <- V[j, j:(n - 1)] + D[(j + 1):n]
       D[j] <- min(dist)
@@ -35,6 +36,8 @@ dynProg.mean <- function(y, Kmax, Lmin = 1) {
     tau.mat[k, 1:k] <- Pos[1, 1:k] - 1
   }
   
-  out <- list(Test = tau.mat, obj = data.frame(K = (1:Kmax), U = U))
+  out <- list(cps_pos = tau.mat,
+              obj = data.frame(ncp = 0:max_ncp,
+                               U = U))
   return(out)
 }
