@@ -494,84 +494,97 @@ server <- function(input, output, session) {
   
   #### Compute Performance ####
   
-  # So far the performance is only computed for the right-most change point (the last change point timewise)
-  # This is something that can be changed easily, and we could even let the user choose which change
-  # point to test. Furthermore, I only considered differences in mean that lead to an upward trend, 
-  # so I take the minimum t value from the t-test (mu1 - mu2 is going to be negative is mu2 is larger)
+  # The performance is only computed for the right-most change point (the last 
+  # change point in time). Only differences in mean that lead to an upward trend
+  # have been considered, i.e. the minimum t value from the Welch's t-test is
+  # taken (mu1 - mu2 is going to be negative if mu2 is larger)
   
-  rv$V.hat <- NULL
-  rv$V.stat <- NULL
+  rv$V_hat <- NULL  # t-statistic of
+  rv$V_stat <- NULL
   
   p_value <- eventReactive(input$performance, {
     
-    y_perf <- data_full()$y[x_previous():x_end()]
+    y_perf <- data_full()$y[x_previous() : x_end()]
     n_perf <- length(y_perf)
     
-    ## Find change point assuming y's are normally distributed, using t.test for difference in means and picking largest statistic value S_t
-    t.stat <- t.pval <- NULL
+    ## Find change point assuming y's are normally distributed, using t.test for
+    ## difference in means and picking smallest statistic value t_stat
+    t_stat <- NULL
     for (tau in 1:(n_perf - 1)) {
-      test.tau <- t.test(y_perf[1:tau], y_perf[(tau + 1):n_perf], var.equal = TRUE)
-      t.stat <- c(t.stat, test.tau$statistic)
-      t.pval <- c(t.pval, test.tau$p.value)
+      ## Compute Welch's t-test
+      test_tau <- t.test(x = y_perf[1:tau],
+                         y = y_perf[(tau + 1):n_perf],
+                         var.equal = TRUE)
+      ## Store results
+      t_stat <- c(t_stat, test_tau$statistic)
     }
-    # tau.hat <- which.max(t.stat)  # for a difference in means in the opposite direction
-    tau.hat <- which.min(t.stat)
-    rv$V.hat <- t.stat[tau.hat]
-    
+    tau.hat <- which.min(t_stat)
+    rv$V_hat <- t_stat[tau.hat]
     
     ## Register the parallel backend
     ncores <- detectCores() - 2
     cl <- makeCluster(ncores)
     registerDoSNOW(cl)
     
+    ## Number of simulations (bootstrap resamples)
     n_sim <- 1000
     
-    ## The detail to be captured by the progress bar should be contained within this function and its braces
-    withProgress(message = 'Computing performance', min = 0, max = n_sim, value = 0, {
+    ## The detail to be captured by the progress bar should be contained within
+    ## this function and its braces
+    withProgress(message = 'Computing performance',
+                 min = 0,
+                 max = n_sim,
+                 value = 0, {
       
-      progress <- function(i) incProgress(1, detail = paste("Running simulation", i, "out of", n_sim))
+      progress <- function(i) {
+        incProgress(amount = 1,
+                    detail = paste("Running simulation", i, "out of", n_sim))
+      }
       opts <- list(progress = progress)
       
-      ## Run simulations in parallel
-      rv$V.stat <- foreach(i=1:n_sim,
+      ## Run bootstrap simulations in parallel. V_stat object will contain the 
+      ## distribution of t-statistics from the t-test assuming 
+      rv$V_stat <- foreach(i=1:n_sim,
                            .combine = 'rbind',
                            .options.snow = opts,
                            .inorder = FALSE
       ) %dopar% {
-        y.sim <- rnorm(n_perf)
-        t.stat <- NULL
-        for (tau in (1:(n_perf-1))) {
-          test.tau <- t.test(y.sim[1:tau], y.sim[(tau+1):n_perf], var.equal = TRUE)
-          t.stat <- c(t.stat, test.tau$statistic)
+        
+        y_sim <- rnorm(n_perf)  # assume y's are normally distributed
+        t_stat <- NULL
+        
+        ## Find change point assuming y's are normally distributed, using t.test
+        # for difference in means and picking smallest statistic value t_stat
+        for (tau in 1:(n_perf - 1)) {
+          ## Compute Welch's t-test
+          test_tau <- t.test(x = y_sim[1:tau],
+                             y = y_sim[(tau+1):n_perf],
+                             var.equal = TRUE)
+          ## Store results
+          t_stat <- c(t_stat, test_tau$statistic)
         }
-        # tau.max <- which.max(t.stat)  # for a difference in means in the opposite direction
-        tau.min <- which.min(t.stat)
-        return(t.stat[tau.min])
+        tau.min <- which.min(t_stat)
+        return(t_stat[tau.min])
       }
       stopCluster(cl)
     })
     
-    # p_value <- 1 - ecdf(rv$V.stat)(rv$V.hat)  # for a difference in means in the opposite direction
-    p_val <- ecdf(rv$V.stat)(rv$V.hat)
+    p_val <- ecdf(rv$V_stat)(rv$V_hat)
     p_val
   })
   
   #### Histogram with simulations ####
   output$histogram <- renderPlot({
     
-    if (!is.null(rv$V.stat)){
+    if (!is.null(rv$V_stat)){
       
       ## Plot histogram of distribution of max(S_t)
-      xmin <- floor(min(min(rv$V.stat) - 1, rv$V.hat - 1))
-      hist(rv$V.stat, breaks = 50, probability = TRUE,
-           xlim = c(xmin, max(rv$V.stat)),
+      xmin <- floor(min(min(rv$V_stat) - 1, rv$V_hat - 1))
+      hist(rv$V_stat, breaks = 50, probability = TRUE,
+           xlim = c(xmin, max(rv$V_stat)),
            main = "Distribution of test statistic",
            xlab = "Test statistic value")
-      abline(v = rv$V.hat, col = "darkred")
-      
-      # hist(rv$V.stat, breaks = 50, probability = TRUE, xlim = c(0, xmax))  # for a difference in means in the opposite direction
-      # xmax <- ceiling(max(max(rv$V.stat) + 1, rv$V.hat + 1))  # for a difference in means in the opposite direction
-      # abline(v = rv$V.hat, col = "darkred")  
+      abline(v = rv$V_hat, col = "darkred")
     }
   })
   
