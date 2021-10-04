@@ -285,7 +285,13 @@ server <- function(input, output, session) {
   
   ## Create list of reactive values, and create value seps for the separation
   ## between segments (change points + 0.5)
-  rv <- reactiveValues(seps = NULL)
+  rv <- reactiveValues(cps = NULL,
+                       cps_0n = NULL,
+                       seps = NULL,
+                       seps_1n = NULL)
+  
+  ## Array of change points values
+  cps <- reactive({ r()$cps_pos[nChangePoints(), 1:nChangePoints()] })
   
   ## Array of change points values including 0 and n
   cps_0n <- reactive({ c(0,
@@ -293,47 +299,56 @@ server <- function(input, output, session) {
                          n())
                       })
   
-  ## Separation between different segments (change points + 0.5)
-  seps_0n <- reactive({ c(0,
-                          cps_0n()[2:(nChangePoints() + 1)] + 0.5,
+  ## Separations between different segments (change points + 0.5)
+  seps <- reactive({ r()$cps_pos[nChangePoints(), 1:nChangePoints()] + 0.5 })
+  
+  ## Separations between different segments (change points + 0.5) including
+  ## 1 and n
+  seps_1n <- reactive({ c(1,
+                          r()$cps_pos[nChangePoints(), 1:nChangePoints()] + 0.5,
                           n())
                        })
   
-  ## This is to avoid an error due to lack of values in rv$seps when launching
-  ## the app
+  ## This event is to avoid an error due to lack of values in rv$seps when 
+  ## launching the app
   observeEvent(input$changePointSelection,
-               { rv$seps <- seps_0n() },
+               { rv$cps <- cps()
+                 rv$cps_0n <- cps_0n()
+                 rv$seps <- seps()
+                 rv$seps_1n <- seps_1n() },
                once = TRUE)
   
-  ## Update rv$seps every time the user goes back to manual if necessary
-  observe({
-    if (input$changePointSelection == "manual") { 
-      if (rv$seps[length(rv$seps)] != n()) {
-        rv$seps <- seps_0n()
-      }
-    }
-  })
+  # ## Update variables in rv every time the user goes back to manual if necessary
+  # observe({
+  #   if (input$changePointSelection == "manual") { 
+  #     rv$cps <- cps()
+  #     rv$cps_0n <- cps_0n()
+  #     rv$seps <- seps()
+  #     rv$seps_1n <- seps_1n()
+  #   }
+  # })
   
   
   
-  ## x_n of first mean, x_1 - 1 of second mean
+  ## x_n of first mean = x_1 - 1 of second mean = last change point
   x1 <- reactive({
     if (input$changePointSelection == "manual") {
-      rv$seps[length(rv$seps) - 1] + 0.5
+      rv$cps[length(rv$cps)]
+      
     } else {
-      seps_0n()[nChangePoints() + 1] + 0.5
+      cps()[nChangePoints()]
     }
   })
   
-  ## Last data point in filtered data, x_2 of second mean
+  ## Last data point in filtered data = x_n of second mean
   x_end <- reactive({ n() })
   
   ## x_1 of first mean
   x_previous <- reactive({
     if (input$changePointSelection == "manual") {
-      rv$seps[length(rv$seps) - 2] + 0.5
+      rv$cps_0n[length(rv$cps)] + 1
     } else {
-      seps_0n()[nChangePoints()] + 0.5
+      cps_0n()[nChangePoints()] + 1
     }
   })
   
@@ -350,15 +365,15 @@ server <- function(input, output, session) {
     df_means <- data.frame()
     
     ## Store mean for each segment
-    for (k in ( 1:(nChangePoints() + 1) )) {
+    for (k in 1:(nChangePoints() + 1) ) {
       mean_k <- mean( data()$y[ (cps_0n()[k] + 1) :
-                                (cps_0n()[k + 1]) ]
+                                 cps_0n()[k + 1] ]
                      )
       df_means <- rbind(df_means,
-                        c(seps_0n()[k], seps_0n()[k + 1], mean_k, mean_k)
+                        c(seps_1n()[k], seps_1n()[k + 1], mean_k, mean_k)
                         )
     }
-    names(df_means) <- c("x1","x2","y1","y2")
+    colnames(df_means) <- c("x1","x2","y1","y2")
     df_means
   })
   
@@ -395,7 +410,7 @@ server <- function(input, output, session) {
                     color="#6666CC") +
          xlab("Time (months)") +
          ylab("Failure rate (%)") +
-         geom_vline(xintercept = seps_0n()[2:(nChangePoints() + 1)],
+         geom_vline(xintercept = seps(),
                     color="red",
                     size=0.25) +
          geom_segment(data = means(),
@@ -413,7 +428,7 @@ server <- function(input, output, session) {
     g
   })
   
-  output$plot3_text <- renderText({ seps_0n()[2:(nChangePoints() + 1)] })
+  output$plot3_text <- renderText({ seps() })
   
   
   ##### Manual #####
@@ -433,35 +448,48 @@ server <- function(input, output, session) {
       
       if (input$add_remove_changePoint == "add") {
         if ( !(x_new %in% rv$seps)) {  # if change point does not exist
-          rv$seps <- sort(c(isolate(rv$seps), x_new))  # add new change point
+          
+          ## Add new change point
+          rv$cps <- sort(c(isolate(rv$cps), x_new - 0.5))
+          rv$cps_0n <- sort(c(isolate(rv$cps_0n), x_new - 0.5))
+          
+          
+          ## Add new separation point
+          rv$seps <- sort(c(isolate(rv$seps), x_new))
+          rv$seps_1n <- sort(c(isolate(rv$seps_1n), x_new))
         }
       } else {
         if (x_new %in% rv$seps) {  # if change point exists
-          rv$seps <- rv$seps[-which(rv$seps == x_new)]  # remove change point
+          
+          ## Remove change point
+          rv$cps <- rv$cps[-which(rv$cps == (x_new - 0.5))]
+          rv$cps_0n <- rv$cps_0n[-which(rv$cps_0n == (x_new - 0.5))]
+          
+          ## Remove separation point
+          rv$seps <- rv$seps[-which(rv$seps == x_new)]
+          rv$seps_1n <- rv$seps_1n[-which(rv$seps_1n == x_new)]
         }
       }
     }
     
-    nSegments_new <- length(rv$seps) - 1
-    cps_0n_new <- floor(rv$seps)
-    
     ## Data means (manual)
     means <- data.frame()
-    for (k in 1:nSegments_new) {
-      mean_k <- mean( data()$y[ (cps_0n_new[k] + 1) :
-                                (cps_0n_new[k + 1]) ]
+    
+    for (k in 1:(length(rv$cps) + 1)) {
+      mean_k <- mean( data()$y[ (rv$cps_0n[k] + 1) :
+                                 rv$cps_0n[k + 1] ]
                      )
       means <- rbind(means,
-                     c(rv$seps[k], rv$seps[k + 1], mean_k, mean_k) )
+                     c(rv$seps_1n[k], rv$seps_1n[k + 1], mean_k, mean_k) )
     }
-    names(means) <- c("x1","x2","y1","y2")
+    colnames(means) <- c("x1","x2","y1","y2")
     
     g <- ggplot(data()) +
          geom_point(aes(time, y),
                     color="#6666CC") +
          xlab("Time (months)") +
          ylab("Failure rate (%)") +
-         geom_vline(xintercept = rv$seps[2:nSegments_new],
+         geom_vline(xintercept = rv$seps,
                     color="red",
                     size=0.25) +
          geom_segment(data = means,
@@ -488,7 +516,7 @@ server <- function(input, output, session) {
     }
   })
   
-  output$plot3_text_manual <- renderText({ rv$seps[2:(length(rv$seps) - 1)] })
+  output$plot3_text_manual <- renderText({ rv$seps })
   
   
   
@@ -537,7 +565,9 @@ server <- function(input, output, session) {
                  value = 0, {
       
       progress <- function(i) {
-        incProgress(amount = 1,
+        ## Special increment to make the progress seem more linear
+        inc <- 1.5 * (1 - (i / n_sim) ^ 2)
+        incProgress(amount = inc,
                     detail = paste("Running simulation", i, "out of", n_sim))
       }
       opts <- list(progress = progress)
@@ -556,10 +586,19 @@ server <- function(input, output, session) {
         ## Find change point assuming y's are normally distributed, using t.test
         # for difference in means and picking smallest statistic value t_stat
         for (tau in 1:(n_perf - 1)) {
+          
+          y1 <- y_sim[1:tau]
+          y2 <- y_sim[(tau+1):n_perf]
+          
           ## Compute Welch's t-test
-          test_tau <- t.test(x = y_sim[1:tau],
-                             y = y_sim[(tau+1):n_perf],
-                             var.equal = TRUE)
+          if (length(y1) > 1 && length(y2) > 1) {
+            test_tau <- t.test(y1, y2, var.equal = FALSE)  # Welch's t-test
+          } else {
+            ## The variances can only be computed if length(y1) and length(l2)
+            ## are > 1, so for the edge cases we assume the variances are equal
+            test_tau <- t.test(y1, y2, var.equal = TRUE)
+          }
+          
           ## Store results
           t_stat <- c(t_stat, test_tau$statistic)
         }
@@ -572,6 +611,7 @@ server <- function(input, output, session) {
     p_val <- ecdf(rv$V_stat)(rv$V_hat)
     p_val
   })
+  
   
   #### Histogram with simulations ####
   output$histogram <- renderPlot({
