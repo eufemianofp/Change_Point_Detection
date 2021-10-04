@@ -341,8 +341,8 @@ server <- function(input, output, session) {
   })
   
   
-  
   #### Plot 3 ####
+  
   
   ##### Automatic & Semi-automatic #####
   
@@ -507,7 +507,6 @@ server <- function(input, output, session) {
   output$plot3_text_manual <- renderText({ rv$seps })
   
   
-  
   #### Compute Performance ####
   
   # The performance is only computed for the right-most change point (the last 
@@ -622,10 +621,14 @@ server <- function(input, output, session) {
                 ) * 100
   })
   
+  
+  #### Performance ####
   output$performance <- renderText({
     paste0("PERFORMANCE: ", round(perf(), 2), "%")
   })
   
+  
+  #### Performance's p-value ####
   output$show_pvalue <- renderText({
     paste0("p-value: ", round(p_value(), 4))
   })
