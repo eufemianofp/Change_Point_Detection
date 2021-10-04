@@ -318,33 +318,21 @@ server <- function(input, output, session) {
                  rv$seps_1n <- seps_1n() },
                once = TRUE)
   
-  # ## Update variables in rv every time the user goes back to manual if necessary
-  # observe({
-  #   if (input$changePointSelection == "manual") { 
-  #     rv$cps <- cps()
-  #     rv$cps_0n <- cps_0n()
-  #     rv$seps <- seps()
-  #     rv$seps_1n <- seps_1n()
-  #   }
-  # })
-  
-  
-  
-  ## x_n of first mean = x_1 - 1 of second mean = last change point
-  x1 <- reactive({
+  ## x_1 of segment 2 (second mean) = last change point
+  x1_s2 <- reactive({
     if (input$changePointSelection == "manual") {
-      rv$cps[length(rv$cps)]
+      rv$cps[length(rv$cps)] + 1
       
     } else {
-      cps()[nChangePoints()]
+      cps()[nChangePoints()] + 1
     }
   })
   
-  ## Last data point in filtered data = x_n of second mean
-  x_end <- reactive({ n() })
+  ## Last data point in filtered data
+  x2_s2 <- reactive({ n() })
   
-  ## x_1 of first mean
-  x_previous <- reactive({
+  ## x_1 of segment 1 (first mean)
+  x1_s1 <- reactive({
     if (input$changePointSelection == "manual") {
       rv$cps_0n[length(rv$cps)] + 1
     } else {
@@ -380,7 +368,7 @@ server <- function(input, output, session) {
   ## Data for the dotted regression line
   data_regression <- reactive({
     
-    length_previous_segment <- abs( x1() - x_previous() )
+    length_previous_segment <- abs( x1_s2() - x1_s1() )
     
     # Take into account last 10% from previous interval (sometimes the change
     # point is flagged slightly after the trend started, this helps get the
@@ -388,13 +376,13 @@ server <- function(input, output, session) {
     extra_lm <- floor(length_previous_segment * 0.1)
     
     ## x and y for the linear regression model
-    x_lm <- (x1() - extra_lm) : x_end()
+    x_lm <- (x1_s2() - extra_lm) : x2_s2()
     y_lm <- data_full()$y[x_lm]
     
     fit <- lm(y ~ x, data = data.frame(x = x_lm,
                                        y = y_lm))
     
-    x_plot <- seq(x1(), x_end(), by = 0.01)
+    x_plot <- seq(x1_s2(), x2_s2(), by = 0.01)
     y_plot <- predict(fit,
                       newdata = data.frame(x=x_plot))
     
@@ -532,7 +520,7 @@ server <- function(input, output, session) {
   
   p_value <- eventReactive(input$performance, {
     
-    y_perf <- data_full()$y[x_previous() : x_end()]
+    y_perf <- data_full()$y[x1_s1() : x2_s2()]
     n_perf <- length(y_perf)
     
     ## Find change point assuming y's are normally distributed, using t.test for
