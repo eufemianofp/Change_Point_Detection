@@ -242,6 +242,8 @@ server <- function(input, output, session) {
   
   ## Solve dynamic programming problem
   r <- reactive({
+    ## +4 to max_ncp to detect elbow more easily when the actual number of
+    ## change points is equal to maxNumberChangePoints
     result <- dynProg.mean(y = data()$y,
                            max_ncp = maxNumberChangePoints + 4)
   })  
@@ -265,7 +267,13 @@ server <- function(input, output, session) {
   nChangePoints <- reactive({
     
     if (input$changePointSelection == "automatic") {  # Automatic
+      
+      ## The function findElbow returns the position at which the elbow takes 
+      ## place. This position is +1 the number of change points, since the
+      ## starting position for 0 change points has index number 1. Hence the
+      ## number of change points is the result of findElbow - 1
       findElbow(r()$obj$U) - 1
+      
     } else {  # Semi-automatic and Manual
       as.numeric(input$nChangePoints)
     }
@@ -274,6 +282,8 @@ server <- function(input, output, session) {
   ## Output number of change points
   output$nChangePoints <- renderText({ nChangePoints() })
   
+  
+  #### Data preparation ####
   
   ## Create list of reactive values, and create value cp for change points
   rv <- reactiveValues(cp = NULL)
@@ -418,7 +428,9 @@ server <- function(input, output, session) {
       x_new <- (ceiling(input$plot3_click$x) + floor(input$plot3_click$x)) / 2
       
       if (input$add_remove_changePoint == "add") {
-        rv$cp <- sort(c(isolate(rv$cp), x_new))  # add new change point
+        if ( !(x_new %in% rv$seps)) {  # if change point does not exist
+          rv$cp <- sort(c(isolate(rv$cp), x_new))  # add new change point
+        }
       } else {
         if (x_new %in% rv$cp) {  # if change point exists
           rv$cp <- rv$cp[-which(rv$cp == x_new)]  # remove change point
@@ -539,7 +551,7 @@ server <- function(input, output, session) {
     p_val
   })
   
-  
+  #### Histogram with simulations ####
   output$histogram <- renderPlot({
     
     if (!is.null(rv$V.stat)){
