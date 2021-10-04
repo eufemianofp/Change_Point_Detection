@@ -82,7 +82,7 @@ ui <- fluidPage(
   ## Only show this panel if "Manually" is chosen
   conditionalPanel(
     condition = "input.changePointSelection == 'manual'",
-    div(style="height: 5px"),
+    div(style="height: 19px"),
     radioButtons(inputId = "add_remove_changePoint",
                  label = NULL,
                  choices = list("Add change point" = "add",
@@ -249,21 +249,22 @@ server <- function(input, output, session) {
   
   #### Plot 2 ####
   # 
-  # This is the plot that shows how likely are the different points to be a change point
+  # This plot shows how likely different points are to be a change point
   #
   # output$plot2 <- renderPlot({
   # 
-  #   ggplot(data=r()$obj) +
-  #     geom_line(aes(ncp,U), size=1, colour="purple") +
-  #     geom_point(aes(ncp,U), size=2, colour="purple")
+  #   ggplot(data = r()$obj) +
+  #     geom_line(aes(ncp,U), size = 1, colour = "purple") +
+  #     geom_point(aes(ncp,U), size = 2, colour = "purple")
   # })
   
   
+  #### Number of change points ####
   
-  ## Get number of change points
+  ## Number of change points
   nChangePoints <- reactive({
     
-    if (input$changePointSelection == "automatic"){  # Automatic
+    if (input$changePointSelection == "automatic") {  # Automatic
       findElbow(r()$obj$U) - 1
     } else {  # Semi-automatic and Manual
       as.numeric(input$nChangePoints)
@@ -278,17 +279,25 @@ server <- function(input, output, session) {
   rv <- reactiveValues(cp = NULL)
   
   ## Change points including 0 and n
-  cps_0n <- reactive({ c(0, r()$cps_pos[nChangePoints(), 1:nChangePoints()], n()) })
+  cps_0n <- reactive({ c(0,
+                         r()$cps_pos[nChangePoints(), 1:nChangePoints()],
+                         n())
+                      })
   
   ## Separation between different segments (change points + 0.5)
-  seps_0n <- reactive({ c(0, cps_0n()[2:(nChangePoints() + 1)] + 0.5, n()) })
+  seps_0n <- reactive({ c(0,
+                          cps_0n()[2:(nChangePoints() + 1)] + 0.5,
+                          n())
+                       })
   
   
   
   ## This is to avoid an error due to lack of values when launching the app
-  observeEvent(input$changePointSelection, { rv$cp <- seps_0n() }, once = TRUE)
+  observeEvent(input$changePointSelection,
+               { rv$cp <- seps_0n() },
+               once = TRUE)
   
-  ## Update every time we go back to manual if necessary
+  ## Update rv$cp every time the user goes back to manual if necessary
   observe({
     if (input$changePointSelection == "manual") { 
       if (rv$cp[length(rv$cp)] != n()) {
@@ -324,6 +333,8 @@ server <- function(input, output, session) {
   
   #### Plot 3 ####
   
+  ##### Automatic & Semi-automatic #####
+  
   ## Data mean per segment, green horizontal lines in the plot (automatic and semi-automatic)
   dm <- reactive({
     
@@ -331,8 +342,10 @@ server <- function(input, output, session) {
     
     ## Store mean for each segment
     for (k in ( 1:(nChangePoints() + 1) )) {
-      m <- mean( data()$y[(cps_0n()[k] + 1) : (cps_0n()[k + 1])] )
-      d <- rbind(d, c(seps_0n()[k], seps_0n()[k + 1], m, m) )
+      m <- mean( data()$y[(cps_0n()[k] + 1) :
+                          (cps_0n()[k + 1])] )
+      d <- rbind(d,
+                 c(seps_0n()[k], seps_0n()[k + 1], m, m) )
     }
     names(d) <- c("x1","x2","y1","y2")
     d
@@ -342,32 +355,46 @@ server <- function(input, output, session) {
   data_regression <- reactive({
     
     length_previous_segment <- abs( x1() - x_previous() )
-    extra_lm <- floor(length_previous_segment * 0.1)  # take into account last 10% from previous interval (sometimes the change point is slightly after the trend started, this helps get the correct trend line)
+    
+    # Take into account last 10% from previous interval (sometimes the change
+    # point is flagged slightly after the trend started, this helps get the
+    # correct trend line)
+    extra_lm <- floor(length_previous_segment * 0.1)
     
     ## x and y for the linear regression model
     x_lm <- (x1() - extra_lm) : x_end()
     y_lm <- data_full()$y[x_lm]
     
     fit <- lm(y ~ x, data = data.frame(x = x_lm, y = y_lm))
-    # fit <- loess(y ~ x, data = data.frame(x = x_lm, y = data_full()$y[x_lm]), span = 10)
     
     x_plot <- seq(x1(), x_end(), by = 0.01)
     y_plot <- predict(fit, newdata=data.frame(x=x_plot))
-    d <- data.frame(x_plot = x_plot, y_plot = y_plot)
+    
+    d <- data.frame(x_plot = x_plot,
+                    y_plot = y_plot)
     d
   })
   
   output$plot3 <- renderPlot({
     
     g <- ggplot(data()) +
-      geom_point(aes(time, y), color="#6666CC") +
-      xlab("Time (months)") +
-      ylab("Failure rate (%)") +
-      geom_vline(xintercept = seps_0n()[2:(nChangePoints() + 1)], color="red", size=0.25) +
-      geom_segment(data = dm(), aes(x=x1, y=y1, xend=x2, yend=y2), colour="green", size=0.75)
+         geom_point(aes(time, y),
+                    color="#6666CC") +
+         xlab("Time (months)") +
+         ylab("Failure rate (%)") +
+         geom_vline(xintercept = seps_0n()[2:(nChangePoints() + 1)],
+                    color="red",
+                    size=0.25) +
+         geom_segment(data = dm(),
+                      aes(x=x1, y=y1, xend=x2, yend=y2),
+                      colour="green",
+                      size=0.75)
     
     if (input$regression_line){
-      g <- g + geom_line(data = data_regression(), aes(x_plot, y_plot), colour="black", size=0.75, linetype = "dashed")
+      g <- g + geom_line(data = data_regression(), aes(x_plot, y_plot),
+                         colour="black",
+                         size=0.75,
+                         linetype = "dashed")
     }
     g
   })
@@ -375,22 +402,25 @@ server <- function(input, output, session) {
   output$plot3_text <- renderText({ seps_0n()[2:(nChangePoints() + 1)] })
   
   
+  ##### Manual #####
   
-  # The following manual outputs are the same as the ones above, but it's the only way I found that 
-  # R Shiny allowed to have a "clickable" plot only for the manual setting, and not clickable for
-  # the automatic and semi-automatic mode
+  # The following manual outputs are the same as the ones above. This
+  # duplication is the only way I found that R Shiny allowed to have a
+  # "clickable" plot only for the manual setting and not clickable for the
+  # automatic and semi-automatic mode
   
   output$plot3_manual <- renderPlot({
     
     ## Update change points
     if (!is.null(input$plot3_click)) {
-      ## Get new change point
+      
+      ## Get new change point rounding to closest .5 number (separation point)
       x_new <- (ceiling(input$plot3_click$x) + floor(input$plot3_click$x)) / 2
       
-      if (input$add_remove_changePoint == "add"){
+      if (input$add_remove_changePoint == "add") {
         rv$cp <- sort(c(isolate(rv$cp), x_new))  # add new change point
       } else {
-        if (x_new %in% rv$cp){  # if change point exists
+        if (x_new %in% rv$cp) {  # if change point exists
           rv$cp <- rv$cp[-which(rv$cp == x_new)]  # remove change point
         }
       }
@@ -402,35 +432,46 @@ server <- function(input, output, session) {
     ## Data means (manual)
     d <- data.frame()
     for (k in 1:nSegments_new) {
-      m <- mean( data()$y[(cps_0n_new[k] + 1) : (cps_0n_new[k + 1])] )
-      d <- rbind(d, c(rv$cp[k], rv$cp[k + 1], m, m) )
+      m <- mean( data()$y[(cps_0n_new[k] + 1) :
+                          (cps_0n_new[k + 1])] )
+      d <- rbind(d,
+                 c(rv$cp[k], rv$cp[k + 1], m, m) )
     }
     names(d) <- c("x1","x2","y1","y2")
     
     g <- ggplot(data()) +
-      geom_point(aes(time, y), color="#6666CC") +
-      ylab("failure rate") +
-      geom_vline(xintercept = rv$cp[2:nSegments_new], color="red", size=0.25) +
-      geom_segment(data = d, aes(x=x1, y=y1, xend=x2, yend=y2), colour="green", size=0.75)
+         geom_point(aes(time, y),
+                    color="#6666CC") +
+         xlab("Time (months)") +
+         ylab("Failure rate (%)") +
+         geom_vline(xintercept = rv$cp[2:nSegments_new],
+                    color="red",
+                    size=0.25) +
+         geom_segment(data = d,
+                      aes(x=x1, y=y1, xend=x2, yend=y2),
+                      colour="green",
+                      size=0.75)
     
     if (input$regression_line) {
-      g <- g + geom_line(data = data_regression(), aes(x_plot, y_plot), colour="black", size=0.75, linetype = "dashed")
+      g <- g + geom_line(data = data_regression(),
+                         aes(x_plot, y_plot),
+                         colour="black",
+                         size=0.75,
+                         linetype = "dashed")
     }
     g
   })
   
   output$plot3_clickInfo <- renderText({
     if (!is.null(input$plot3_hover)) {
-      paste0("time = ", round(input$plot3_hover$x, 2), "\nfailure rate = ", round(input$plot3_hover$y, 4))
+      paste0("time = ", round(input$plot3_hover$x, 2),
+             "\nfailure rate = ", round(input$plot3_hover$y, 4))
     } else {
       paste0("time = ", "\nfailure rate = ")
     }
   })
   
-  output$plot3_text_manual <- renderText({ 
-    rv$cp[2:(length(rv$cp) - 1)]
-    # rv$cp  # also contains 0 and last data point
-    })
+  output$plot3_text_manual <- renderText({ rv$cp[2:(length(rv$cp) - 1)] })
   
   
   
@@ -518,7 +559,9 @@ server <- function(input, output, session) {
   })
   
   perf <- reactive({
-    performance(pvalue = p_value(), sensitivity = as.numeric(input$sensitivity)) * 100
+    performance(pvalue = p_value(),
+                sensitivity = as.numeric(input$sensitivity)
+                ) * 100
   })
   
   output$performance <- renderText({
