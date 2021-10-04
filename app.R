@@ -246,18 +246,17 @@ server <- function(input, output, session) {
     ## change points is equal to maxNumberChangePoints
     result <- dynProg.mean(y = data()$y,
                            max_ncp = maxNumberChangePoints + 4)
-  })  
+  })
   
   
   #### Plot 2 ####
-  # 
-  # This plot shows how likely different points are to be a change point
-  #
+  
+  ## This plot shows how likely different points are to be a change point
   # output$plot2 <- renderPlot({
   # 
   #   ggplot(data = r()$obj) +
-  #     geom_line(aes(ncp,U), size = 1, colour = "purple") +
-  #     geom_point(aes(ncp,U), size = 2, colour = "purple")
+  #     geom_line(aes(ncp, U), size = 1, colour = "purple") +
+  #     geom_point(aes(ncp, U), size = 2, colour = "purple")
   # })
   
   
@@ -345,20 +344,22 @@ server <- function(input, output, session) {
   
   ##### Automatic & Semi-automatic #####
   
-  ## Data mean per segment, green horizontal lines in the plot (automatic and semi-automatic)
+  ## Data mean per segment, green horizontal lines in the plot (automatic and
+  ## semi-automatic)
   dm <- reactive({
     
-    d <- data.frame()
+    df <- data.frame()
     
     ## Store mean for each segment
     for (k in ( 1:(nChangePoints() + 1) )) {
       m <- mean( data()$y[(cps_0n()[k] + 1) :
-                          (cps_0n()[k + 1])] )
-      d <- rbind(d,
-                 c(seps_0n()[k], seps_0n()[k + 1], m, m) )
+                          (cps_0n()[k + 1])
+                          ])
+      df <- rbind(df,
+                  c(seps_0n()[k], seps_0n()[k + 1], m, m) )
     }
-    names(d) <- c("x1","x2","y1","y2")
-    d
+    names(df) <- c("x1","x2","y1","y2")
+    df
   })
   
   ## Data for the dotted regression line
