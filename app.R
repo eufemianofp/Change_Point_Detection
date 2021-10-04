@@ -285,7 +285,7 @@ server <- function(input, output, session) {
   #### Data preparation ####
   
   ## Create list of reactive values, and create value cp for change points
-  rv <- reactiveValues(cp = NULL)
+  rv <- reactiveValues(seps = NULL)
   
   ## Change points including 0 and n
   cps_0n <- reactive({ c(0,
@@ -299,18 +299,16 @@ server <- function(input, output, session) {
                           n())
                        })
   
-  
-  
   ## This is to avoid an error due to lack of values when launching the app
   observeEvent(input$changePointSelection,
-               { rv$cp <- seps_0n() },
+               { rv$seps <- seps_0n() },
                once = TRUE)
   
-  ## Update rv$cp every time the user goes back to manual if necessary
+  ## Update rv$seps every time the user goes back to manual if necessary
   observe({
     if (input$changePointSelection == "manual") { 
-      if (rv$cp[length(rv$cp)] != n()) {
-        rv$cp <- seps_0n()
+      if (rv$seps[length(rv$seps)] != n()) {
+        rv$seps <- seps_0n()
       }
     }
   })
@@ -320,7 +318,7 @@ server <- function(input, output, session) {
   ## x_n of first mean, x_1 - 1 of second mean
   x1 <- reactive({
     if (input$changePointSelection == "manual") {
-      rv$cp[length(rv$cp) - 1] + 0.5
+      rv$seps[length(rv$seps) - 1] + 0.5
     } else {
       seps_0n()[nChangePoints() + 1] + 0.5
     }
@@ -332,7 +330,7 @@ server <- function(input, output, session) {
   ## x_1 of first mean
   x_previous <- reactive({
     if (input$changePointSelection == "manual") {
-      rv$cp[length(rv$cp) - 2] + 0.5
+      rv$seps[length(rv$seps) - 2] + 0.5
     } else {
       seps_0n()[nChangePoints()] + 0.5
     }
@@ -346,20 +344,21 @@ server <- function(input, output, session) {
   
   ## Data mean per segment, green horizontal lines in the plot (automatic and
   ## semi-automatic)
-  dm <- reactive({
+  means <- reactive({
     
-    df <- data.frame()
+    df_means <- data.frame()
     
     ## Store mean for each segment
     for (k in ( 1:(nChangePoints() + 1) )) {
-      m <- mean( data()$y[(cps_0n()[k] + 1) :
-                          (cps_0n()[k + 1])
-                          ])
-      df <- rbind(df,
-                  c(seps_0n()[k], seps_0n()[k + 1], m, m) )
+      mean_k <- mean( data()$y[ (cps_0n()[k] + 1) :
+                                (cps_0n()[k + 1]) ]
+                     )
+      df_means <- rbind(df_means,
+                        c(seps_0n()[k], seps_0n()[k + 1], mean_k, mean_k)
+                        )
     }
-    names(df) <- c("x1","x2","y1","y2")
-    df
+    names(df_means) <- c("x1","x2","y1","y2")
+    df_means
   })
   
   ## Data for the dotted regression line
@@ -376,14 +375,16 @@ server <- function(input, output, session) {
     x_lm <- (x1() - extra_lm) : x_end()
     y_lm <- data_full()$y[x_lm]
     
-    fit <- lm(y ~ x, data = data.frame(x = x_lm, y = y_lm))
+    fit <- lm(y ~ x, data = data.frame(x = x_lm,
+                                       y = y_lm))
     
     x_plot <- seq(x1(), x_end(), by = 0.01)
-    y_plot <- predict(fit, newdata=data.frame(x=x_plot))
+    y_plot <- predict(fit,
+                      newdata = data.frame(x=x_plot))
     
-    d <- data.frame(x_plot = x_plot,
-                    y_plot = y_plot)
-    d
+    df_means <- data.frame(x_plot = x_plot,
+                           y_plot = y_plot)
+    df_means
   })
   
   output$plot3 <- renderPlot({
@@ -396,7 +397,7 @@ server <- function(input, output, session) {
          geom_vline(xintercept = seps_0n()[2:(nChangePoints() + 1)],
                     color="red",
                     size=0.25) +
-         geom_segment(data = dm(),
+         geom_segment(data = means(),
                       aes(x=x1, y=y1, xend=x2, yend=y2),
                       colour="green",
                       size=0.75)
@@ -430,37 +431,38 @@ server <- function(input, output, session) {
       
       if (input$add_remove_changePoint == "add") {
         if ( !(x_new %in% rv$seps)) {  # if change point does not exist
-          rv$cp <- sort(c(isolate(rv$cp), x_new))  # add new change point
+          rv$seps <- sort(c(isolate(rv$seps), x_new))  # add new change point
         }
       } else {
-        if (x_new %in% rv$cp) {  # if change point exists
-          rv$cp <- rv$cp[-which(rv$cp == x_new)]  # remove change point
+        if (x_new %in% rv$seps) {  # if change point exists
+          rv$seps <- rv$seps[-which(rv$seps == x_new)]  # remove change point
         }
       }
     }
     
-    nSegments_new <- length(rv$cp) - 1
-    cps_0n_new <- floor(rv$cp)
+    nSegments_new <- length(rv$seps) - 1
+    cps_0n_new <- floor(rv$seps)
     
     ## Data means (manual)
-    d <- data.frame()
+    means <- data.frame()
     for (k in 1:nSegments_new) {
-      m <- mean( data()$y[(cps_0n_new[k] + 1) :
-                          (cps_0n_new[k + 1])] )
-      d <- rbind(d,
-                 c(rv$cp[k], rv$cp[k + 1], m, m) )
+      mean_k <- mean( data()$y[ (cps_0n_new[k] + 1) :
+                                (cps_0n_new[k + 1]) ]
+                     )
+      means <- rbind(means,
+                     c(rv$seps[k], rv$seps[k + 1], mean_k, mean_k) )
     }
-    names(d) <- c("x1","x2","y1","y2")
+    names(means) <- c("x1","x2","y1","y2")
     
     g <- ggplot(data()) +
          geom_point(aes(time, y),
                     color="#6666CC") +
          xlab("Time (months)") +
          ylab("Failure rate (%)") +
-         geom_vline(xintercept = rv$cp[2:nSegments_new],
+         geom_vline(xintercept = rv$seps[2:nSegments_new],
                     color="red",
                     size=0.25) +
-         geom_segment(data = d,
+         geom_segment(data = means,
                       aes(x=x1, y=y1, xend=x2, yend=y2),
                       colour="green",
                       size=0.75)
@@ -484,7 +486,7 @@ server <- function(input, output, session) {
     }
   })
   
-  output$plot3_text_manual <- renderText({ rv$cp[2:(length(rv$cp) - 1)] })
+  output$plot3_text_manual <- renderText({ rv$seps[2:(length(rv$seps) - 1)] })
   
   
   
