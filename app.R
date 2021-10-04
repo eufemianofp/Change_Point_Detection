@@ -253,10 +253,9 @@ server <- function(input, output, session) {
   
   ## This plot shows how likely different points are to be a change point
   # output$plot2 <- renderPlot({
-  # 
   #   ggplot(data = r()$obj) +
-  #     geom_line(aes(ncp, U), size = 1, colour = "purple") +
-  #     geom_point(aes(ncp, U), size = 2, colour = "purple")
+  #   geom_line(aes(ncp, U), size = 1, colour = "purple") +
+  #   geom_point(aes(ncp, U), size = 2, colour = "purple")
   # })
   
   
@@ -284,10 +283,11 @@ server <- function(input, output, session) {
   
   #### Data preparation ####
   
-  ## Create list of reactive values, and create value cp for change points
+  ## Create list of reactive values, and create value seps for the separation
+  ## between segments (change points + 0.5)
   rv <- reactiveValues(seps = NULL)
   
-  ## Change points including 0 and n
+  ## Array of change points values including 0 and n
   cps_0n <- reactive({ c(0,
                          r()$cps_pos[nChangePoints(), 1:nChangePoints()],
                          n())
@@ -299,7 +299,8 @@ server <- function(input, output, session) {
                           n())
                        })
   
-  ## This is to avoid an error due to lack of values when launching the app
+  ## This is to avoid an error due to lack of values in rv$seps when launching
+  ## the app
   observeEvent(input$changePointSelection,
                { rv$seps <- seps_0n() },
                once = TRUE)
@@ -403,7 +404,8 @@ server <- function(input, output, session) {
                       size=0.75)
     
     if (input$regression_line){
-      g <- g + geom_line(data = data_regression(), aes(x_plot, y_plot),
+      g <- g + geom_line(data = data_regression(),
+                         aes(x_plot, y_plot),
                          colour="black",
                          size=0.75,
                          linetype = "dashed")
