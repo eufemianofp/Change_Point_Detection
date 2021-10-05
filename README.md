@@ -8,13 +8,13 @@ about [Detection of change points in a time series](http://sia.webpopix.org/chan
 
 ## Methods
 
-1. Detection of change points. The number of change points is tested from 1 to 
+1. **Detection of change points**. The number of change points is tested from 1 to 
 10 (in the automatic selection mode), and for each number of change points the 
 optimal change points are found and the Residual Sum of Squares (RSS) is 
 recorded. The optimal number of change points is selected by finding the elbow 
 in the RSS curve (done with file findElbow.R by Bryan A. Hanson). 
 
-2. Computation of performance. In this project, the performance is understood 
+2. **Computation of performance**. In this project, the performance is understood 
 as how likely it is that the failure rate of a product has actually gone up, as 
 opposed to it being random chance. The higher the likelihood of the failure 
 rate to have actually gone up, the lower the product is performing. The 
